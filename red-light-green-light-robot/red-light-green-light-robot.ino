@@ -14,17 +14,12 @@
 
 #define AIM_DELAY         1250
 #define SPIN_DELAY        2000
-// #define TRIGGER_DELAY     1000
 #define TRIGGER_DELAY     900
 #define HEAD_DELAY        1000
-
-// #define TRIGGER_NEU       120
-// #define TRIGGER_FWD       110
 
 #define TRIGGER_NEU       125
 #define TRIGGER_FWD       117
 
-// #define GUN_NEU           15
 #define GUN_NEU           165
 
 #define HEAD_REV          0
@@ -52,15 +47,16 @@ void setup() {
   head.write(HEAD_REV);
 }
 
-int j = 0;
 void loop() {
   // put your main code here, to run repeatedly:
 
   anglesString = "";
-  // Serial.readString(); // Flush buffer
-  while (!Serial.available()) { continue; } // Do nothing
+  while (!Serial.available()) { continue; } // Do nothing while waiting on message from Raspberry Pi
+
+  // Read message from Arduino
   anglesString = Serial.readString();
 
+  // If "#" message, turn head to face toward players and swtich to red light
   if (anglesString.equals("#")) {
     digitalWrite(RED_PIN, HIGH);
     digitalWrite(GREEN_PIN, LOW);
@@ -69,11 +65,14 @@ void loop() {
     return;
   }
 
+  // If "!" (no players to be shot with balls) message, simply turn head to face away from players and swtich to green light
   if (anglesString.equals("!")) {
     digitalWrite(RED_PIN, LOW);
     digitalWrite(GREEN_PIN, HIGH);
     head.write(HEAD_REV);
     delay(HEAD_DELAY);
+
+    // Send 3 copies of acknowledgement message to prevent packet loss
     Serial.println("*");
     delay(5);
     Serial.println("*");
@@ -82,33 +81,43 @@ void loop() {
     return;
   }
   
+  // Count how many angles were sent to shoot with balls
   int angleCount = 0;
   for (int i = 0; i < anglesString.length(); i++) {
     if (anglesString.charAt(i) == ',') {
       angleCount++;
     }
   }
+
+  // Iterate through each angle sent and shoot them with balls
   for (int i = 0; i < angleCount; i++) {
+    // Grab angle from message
     int charIndex = anglesString.indexOf(',');
     String substring = anglesString.substring(0, charIndex);
     if (i != angleCount - 1) {
       anglesString = anglesString.substring(charIndex + 1);
     }
     int angle = substring.toInt();
+
+    // Aim (and wait to complete) and fire (and wait to complete)
     gun.write(angle);
     delay(AIM_DELAY);
     trigger.write(TRIGGER_FWD);
     delay(TRIGGER_DELAY);
     trigger.write(TRIGGER_NEU);
   }
+  // Return gun to neutral position after shooting all angles sent
   gun.write(GUN_NEU);
 
+  // Switch to green light
   digitalWrite(RED_PIN, LOW);
   digitalWrite(GREEN_PIN, HIGH);
 
+  // Turn head to face away from players
   head.write(HEAD_REV);
   delay(HEAD_DELAY);
 
+  // Send 3 copies of acknowledgement message to prevent packet loss
   Serial.println(anglesString);
   delay(5);
   Serial.println(anglesString);
